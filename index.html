@@ -129,7 +129,138 @@ $(document).ready(function () {
 </div>
 
 
-<p>starting</p>
+<div id="purpose" class="section level2">
+<h2>Purpose</h2>
+<p>The goal of this project is to predict the manner in which study participant did exercise. This is the “classe” variable in the training set. The analysis uses Principal Component Analysis (PCA) coupled with a Random Forest model to generate a prediction algorith for a test set.</p>
+</div>
+<div id="load-study-data" class="section level2">
+<h2>Load study data</h2>
+<pre class="r"><code>training &lt;- read.csv(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;)
+quiz &lt;- read.csv(&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;)
+train1 &lt;- training[,c(2,8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+quiz1 &lt;- quiz[,c(2,8:11,37:49,60:68,84:86,102,113:124,140,151:160)]</code></pre>
+</div>
+<div id="split-training-data-into-test-train" class="section level2">
+<h2>Split Training Data into Test / Train</h2>
+<p>The training data set has been split, with 70% of the data used to develop the algorith and 30% used to test the out of sample error.</p>
+<pre class="r"><code>library(caret)</code></pre>
+<pre><code>## Loading required package: lattice</code></pre>
+<pre><code>## Loading required package: ggplot2</code></pre>
+<pre class="r"><code>inTrain &lt;- createDataPartition(y=train1$classe,p=0.7,list=FALSE)
+train2 &lt;- train1[inTrain,]
+test2 &lt;- train1[-inTrain,]</code></pre>
+</div>
+<div id="perform-dimension-reduction-via-pca" class="section level2">
+<h2>Perform Dimension Reduction via PCA</h2>
+<p>53 variables is too many for an efficient Random Forest model, so PCA analysis was used to reduce the number of dimensions.</p>
+<pre class="r"><code>pca &lt;- prcomp(train2[,2:53],scale=TRUE,retx=TRUE)
+std_dev &lt;- pca$sdev
+var &lt;- std_dev^2
+prop_var &lt;- var/sum(var)
+plot(cumsum(prop_var),xlab = &quot;Principal Component&quot;, ylab = &quot;Cumulative Proportion of Variance Explained&quot;,type=&quot;b&quot;)</code></pre>
+<p><img src="data:image/png;base64,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" /><!-- --></p>
+<pre class="r"><code>sum(prop_var[1:20])</code></pre>
+<pre><code>## [1] 0.9061217</code></pre>
+<p>92% of variance is captured by the first 20 principal components. This is deemed satisfactory for the purposes of this report.</p>
+</div>
+<div id="combine-principal-components-with-training-set" class="section level2">
+<h2>Combine Principal Components with Training Set</h2>
+<pre class="r"><code>train3 &lt;- data.frame(classe = train2$classe,pca$x)
+train3 &lt;- train3[,1:21]</code></pre>
+</div>
+<div id="train-random-forest-model" class="section level2">
+<h2>Train Random Forest Model</h2>
+<p>Due to the 5 level classification of the output, a random forest model has been selected. To improve processing speed, the model training will utilise parallel processing and 5 folds / resampling iterations.</p>
+<p>The model has an accurary of 96% on the training data and this is deemed sufficient to proceed.</p>
+<pre class="r"><code>library(parallel)
+library(doParallel)</code></pre>
+<pre><code>## Loading required package: foreach</code></pre>
+<pre><code>## Loading required package: iterators</code></pre>
+<pre class="r"><code>cluster &lt;- makeCluster(detectCores()-1)
+registerDoParallel(cluster)
+fitControl &lt;- trainControl(number=5,allowParallel = TRUE)
+set.seed(5)
+modelFit1 &lt;- train(classe~.,data=train3,method=&quot;rf&quot;,trControl=fitControl)
+stopCluster(cluster)
+registerDoSEQ()
+print(modelFit1)</code></pre>
+<pre><code>## Random Forest 
+## 
+## 13737 samples
+##    20 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Bootstrapped (5 reps) 
+## Summary of sample sizes: 13737, 13737, 13737, 13737, 13737 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa    
+##    2    0.9570346  0.9456866
+##   11    0.9508892  0.9379087
+##   20    0.9346068  0.9173116
+## 
+## Accuracy was used to select the optimal model using the largest value.
+## The final value used for the model was mtry = 2.</code></pre>
+</div>
+<div id="transform-test-data-into-pca" class="section level2">
+<h2>Transform Test data into PCA</h2>
+<pre class="r"><code>test3 &lt;- predict(pca,newdata=test2)
+test3 &lt;- as.data.frame(test3)
+test3 &lt;- test3[,1:20]</code></pre>
+</div>
+<div id="prediction-on-test-data" class="section level2">
+<h2>Prediction on Test data</h2>
+<p>The test partition data is used to assess the model fit. The out of sample accuary is 97%; this is higher than the training set and deemed sufficient to proceed.</p>
+<pre class="r"><code>testPredict &lt;- predict(modelFit1, test3)
+confusionMatrix(test2$classe,testPredict)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1661    2    4    5    2
+##          B   22 1099   15    2    1
+##          C    2   14  995   14    1
+##          D    1    0   44  917    2
+##          E    3    9    4    3 1063
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9745          
+##                  95% CI : (0.9702, 0.9784)
+##     No Information Rate : 0.287           
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9678          
+##  Mcnemar's Test P-Value : 1.346e-06       
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9834   0.9778   0.9369   0.9745   0.9944
+## Specificity            0.9969   0.9916   0.9936   0.9905   0.9961
+## Pos Pred Value         0.9922   0.9649   0.9698   0.9512   0.9824
+## Neg Pred Value         0.9934   0.9947   0.9862   0.9951   0.9988
+## Prevalence             0.2870   0.1910   0.1805   0.1599   0.1816
+## Detection Rate         0.2822   0.1867   0.1691   0.1558   0.1806
+## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
+## Balanced Accuracy      0.9902   0.9847   0.9652   0.9825   0.9952</code></pre>
+</div>
+<div id="transform-quiz-data-into-pca" class="section level2">
+<h2>Transform quiz data into PCA</h2>
+<pre class="r"><code>quiz3 &lt;- predict(pca,newdata=quiz1)
+quiz3 &lt;- as.data.frame(quiz3)
+quiz3 &lt;- quiz3[,1:20]</code></pre>
+</div>
+<div id="prediction-on-quiz-data" class="section level2">
+<h2>Prediction on quiz data</h2>
+<pre class="r"><code>quizPredict &lt;- predict(modelFit1, quiz3)
+quiz_answers &lt;- as.data.frame(quizPredict)
+print(quizPredict)</code></pre>
+<pre><code>##  [1] B A B A A B D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+<p>The algorith correctly identified 19 out of 20 results in the quiz data, 95% accuracy. This is acceptable for the purpose of this report.</p>
+</div>
 
 
 
