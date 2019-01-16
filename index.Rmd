@@ -9,4 +9,94 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-starting
+
+## Purpose
+The goal of this project is to predict the manner in which study participant did exercise. This is the "classe" variable in the training set. The analysis uses Principal Component Analysis (PCA) coupled with a Random Forest model to generate a prediction algorith for a test set.  
+
+## Load study data
+
+```{r}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+quiz <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+train1 <- training[,c(2,8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+quiz1 <- quiz[,c(2,8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+```
+
+## Split Training Data into Test / Train
+The training data set has been split, with 70% of the data used to develop the algorith and 30% used to test the out of sample error. 
+
+```{r}
+library(caret)
+inTrain <- createDataPartition(y=train1$classe,p=0.7,list=FALSE)
+train2 <- train1[inTrain,]
+test2 <- train1[-inTrain,]
+```
+
+## Perform Dimension Reduction via PCA
+53 variables is too many for an efficient Random Forest model, so PCA analysis was used to reduce the number of dimensions. 
+
+```{r}
+pca <- prcomp(train2[,2:53],scale=TRUE,retx=TRUE)
+std_dev <- pca$sdev
+var <- std_dev^2
+prop_var <- var/sum(var)
+plot(cumsum(prop_var),xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained",type="b")
+sum(prop_var[1:20])
+```
+92% of variance is captured by the first 20 principal components. This is deemed satisfactory for the purposes of this report. 
+
+
+## Combine Principal Components with Training Set
+```{r}
+train3 <- data.frame(classe = train2$classe,pca$x)
+train3 <- train3[,1:21]
+```
+
+## Train Random Forest Model
+Due to the 5 level classification of the output, a random forest model has been selected. To improve processing speed, the model training will utilise parallel processing and 5 folds / resampling iterations. 
+
+The model has an accurary of 96% on the training data and this is deemed sufficient to proceed. 
+```{r cachedChunk, cache=TRUE}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores()-1)
+registerDoParallel(cluster)
+fitControl <- trainControl(number=5,allowParallel = TRUE)
+set.seed(5)
+modelFit1 <- train(classe~.,data=train3,method="rf",trControl=fitControl)
+stopCluster(cluster)
+registerDoSEQ()
+print(modelFit1)
+```
+
+
+## Transform Test data into PCA
+```{r}
+test3 <- predict(pca,newdata=test2)
+test3 <- as.data.frame(test3)
+test3 <- test3[,1:20]
+```
+
+## Prediction on Test data
+The test partition data is used to assess the model fit. The out of sample accuary is 97%; this is higher than the training set and deemed sufficient to proceed. 
+```{r}
+testPredict <- predict(modelFit1, test3)
+confusionMatrix(test2$classe,testPredict)
+
+```
+
+## Transform quiz data into PCA
+```{r}
+quiz3 <- predict(pca,newdata=quiz1)
+quiz3 <- as.data.frame(quiz3)
+quiz3 <- quiz3[,1:20]
+```
+
+## Prediction on quiz data
+```{r}
+quizPredict <- predict(modelFit1, quiz3)
+quiz_answers <- as.data.frame(quizPredict)
+print(quizPredict)
+```
+
+The algorith correctly identified 19 out of 20 results in the quiz data, 95% accuracy. This is acceptable for the purpose of this report. 
